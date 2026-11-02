@@ -55,3 +55,6 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
+
+[tool.vercel]
+entrypoint = 'chatbot.api.main:app'
