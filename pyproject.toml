@@ -1,12 +1,11 @@
 [build-system]
 requires = ["setuptools>=75.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta:__legacy__"
 
 [project]
 name = "waste-management-chatbot"
 version = "0.1.0"
 description = "A production-grade, generic RAG chatbot pipeline for waste management technical books"
-readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 
@@ -58,3 +57,6 @@ select = ["E", "F", "I", "W"]
 
 [tool.vercel]
 entrypoint = 'chatbot.api.main:app'
+
+[tool.setuptools.packages.find]
+include = ["chatbot*"]
