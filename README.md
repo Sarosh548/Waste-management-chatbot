@@ -1,243 +1,91 @@
-﻿# MOKK
+# Waste-Management RAG Chatbot
 
-An AI-powered **Retrieval-Augmented Generation (RAG)** chatbot for technical questions about solid waste management. It retrieves relevant passages from engineering books and PDF references, then uses a language model to generate grounded answers with source metadata.
+A production-grade retrieval-augmented generation (RAG) chatbot built for a government-level waste management simulator. It answers technical questions from a corpus of engineering textbooks — and backs every answer with a citation you can check.
+
+## Overview
+
+General-purpose chatbots will happily answer a technical waste-management question from memory, whether or not the answer is right. This chatbot is constrained to a defined knowledge base instead: 6 engineering textbooks, totalling 3,765 pages, indexed as 13,000+ chunks. Answers are retrieved from that corpus first, generated second, and returned with book, chapter and page references.
 
 ## Features
 
-- PDF ingestion, text extraction, overlapping chunking, and metadata preservation.
-- Local 384-dimensional embeddings using Sentence Transformers — `all-MiniLM-L6-v2`.
-- Persistent vector search with ChromaDB.
-- Configurable vector, keyword, and hybrid retriever implementations.
-- LLM gateway supporting Groq (default), Google Gemini, OpenAI, Anthropic, and Ollama.
-- FastAPI backend with chat, health, and document endpoints.
-- SQLite-backed chat session history.
-- Responsive standalone web chat and an embeddable Shadow DOM widget.
-- Automated tests using pytest.
+- **Large, real corpus** — technical knowledge retrieval across 6 engineering textbooks (3,765 pages, 13,000+ chunks)
+- **Hybrid retrieval pipeline** — ChromaDB combined with Sentence-Transformers embeddings for semantic retrieval over the chunked corpus, plus BM25 keyword retrieval (`rank-bm25` is in `requirements.txt`)
+- **Citation-backed answers** — every answer carries book, chapter and page references (see "How citations work")
+- **Provider-agnostic LLM gateway** — supports 5 LLM providers, swappable via a single config change, so the answering model is not hard-wired to one vendor
+- **Tested** — 160 automated tests (pytest) across all 5 modules
 
 ## Architecture
 
-~~~text
-PDF Books / Manuals
-        |
-        v
- PDF Parser -> Text Chunker -> Embeddings -> ChromaDB
-                                               |
-User Question -> Retriever -> Context Formatter
-                                      |
-                                      v
-                                  LLM Gateway
-                                      |
-                                      v
-                              Answer + Sources
-                                      |
-                                      v
-                                  FastAPI
-                                      |
-                                      v
-                           Web Chat / Widget
-~~~
+The repository has 5 modules under `chatbot/`: `api`, `frontend`, `ingestion`, `llm_gateway` and `retriever`.
 
-## Tech Stack
+1. **Ingestion / indexing** — the 6 textbooks are split into 13,000+ chunks and embedded with Sentence-Transformers (`all-MiniLM-L6-v2`, 384-dim).
+2. **Vector store** — chunks and embeddings are stored in ChromaDB (collection `waste_management_books`, persisted under `./data/chromadb`) for retrieval.
+3. **Hybrid retrieval** — an incoming question is matched against the corpus through the ChromaDB + Sentence-Transformers retrieval pipeline, and the most relevant chunks are selected as context.
+4. **LLM gateway** — the retrieved context and the question are passed to the configured LLM provider through a provider-agnostic gateway (5 providers supported, switched by a single config change).
+5. **API + interface** — the service is exposed through a FastAPI backend, with a plain HTML/CSS/JavaScript front end served by the API itself.
 
-| Layer | Technology |
-|---|---|
-| Language | Python 3.11+ |
-| Backend | FastAPI, Uvicorn |
-| PDF processing | PyMuPDF |
-| Embeddings | Sentence Transformers, all-MiniLM-L6-v2 (384 dimensions) |
-| Vector database | ChromaDB |
-| Retrieval | Vector search, BM25 keyword and hybrid retrievers |
-| LLM providers | Groq, Gemini, OpenAI, Anthropic, Ollama |
-| Configuration | YAML, Pydantic, python-dotenv |
-| Chat history | SQLite / aiosqlite |
-| Frontend | HTML, CSS, JavaScript |
-| Testing | pytest |
+## How citations work
 
-## Project Structure
+Answers are generated from retrieved textbook chunks, not from the model's memory alone. Because each chunk originates from a known book, chapter and page range, the answer can be returned with that source attached: **book, chapter, and page**. That makes an answer verifiable — a reader can open the cited page and check whether the chatbot represented it correctly, instead of having to trust a confident-sounding paragraph.
 
-~~~text
-Waste-management-chatbot/
-├── chatbot/
-│   ├── api/
-│   │   ├── routes/             # Chat, health, and document routes
-│   │   ├── services/           # Request orchestration
-│   │   ├── chat_history.py
-│   │   ├── main.py
-│   │   └── models.py
-│   ├── frontend/
-│   │   ├── index.html
-│   │   ├── styles.css
-│   │   ├── chat.js
-│   │   ├── widget.js
-│   │   └── widget-demo.html
-│   ├── ingestion/              # PDF parsing, chunking, embeddings, storage
-│   ├── llm_gateway/            # Provider integrations and prompt templates
-│   ├── retriever/              # Vector, keyword, and hybrid retrieval
-│   └── config.py
-├── tests/
-│   ├── api/
-│   ├── ingestion/
-│   ├── llm_gateway/
-│   └── retriever/
-├── config.yaml
-├── requirements.txt
-└── pyproject.toml
-~~~
+## Tech stack
 
-## Getting Started
+- **Language:** Python (>= 3.11, per `pyproject.toml`)
+- **Vector store / retrieval:** ChromaDB, Sentence-Transformers, BM25
+- **API:** FastAPI, Uvicorn
+- **Front end:** Vanilla HTML / CSS / JavaScript
+- **Tests:** pytest (160 tests, 5 modules)
 
-### Prerequisites
+## Running it
 
-- Python 3.11 or newer
-- Git
-- An API key for your chosen LLM provider (Groq is the default)
-- PDF reference documents for your knowledge base
+All commands below are taken from the repository itself (verified against the public repo on 2026-11-02). They have not been run end-to-end in this preparation — see the note at the end.
 
-### 1. Clone the repository
-
-~~~bash
+```bash
+# 1. Clone the repository
 git clone https://github.com/Sarosh548/Waste-management-chatbot.git
 cd Waste-management-chatbot
-~~~
 
-### 2. Create a virtual environment
+# 2. Create and activate a virtual environment
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
 
-**Windows PowerShell:**
-
-~~~powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-~~~
-
-**macOS / Linux:**
-
-~~~bash
-python3 -m venv .venv
-source .venv/bin/activate
-~~~
-
-### 3. Install dependencies
-
-~~~bash
-python -m pip install --upgrade pip
+# 3. Install dependencies
 pip install -r requirements.txt
-~~~
 
-### 4. Set your API key
+# 4. Configure the LLM provider
+# Edit config.yaml at the repo root: set llm.provider and llm.model.
+# Default: groq / llama-3.3-70b-versatile, temperature 0.1.
+# Providers supported: groq, google, openai, anthropic, ollama.
+# Put the matching key in your environment, e.g. GROQ_API_KEY,
+# GOOGLE_API_KEY, OPENAI_API_KEY or ANTHROPIC_API_KEY — keys are
+# loaded from the environment, not from config.yaml.
 
-Create a `.env` file in the repository root. For the default Groq provider:
-
-~~~dotenv
-GROQ_API_KEY=your_groq_api_key
-~~~
-
-Never commit `.env` or publish API credentials.
-
-### 5. Review configuration
-
-Edit `config.yaml` to set the PDF source directory, chunking options, embedding model, vector store, retriever type, LLM provider/model, chat history, and server settings.
-
-Default settings use `./Books` for source PDFs, ChromaDB for vector storage, `all-MiniLM-L6-v2` for embeddings, and Groq for language generation.
-
-## Build the Knowledge Base
-
-Place PDF books or manuals in the configured source directory (default: `Books/`), then run:
-
-~~~bash
+# 5. Build the textbook index
+# The textbooks themselves are NOT in the repo, and the generated
+# index (data/) is git-ignored, so a fresh clone must build it:
+# place the PDFs in ./Books (the default in config.yaml), then run:
 python -m chatbot.ingestion.cli --source ./Books
-~~~
+# To inspect an existing index instead: python -m chatbot.ingestion.cli --stats
 
-Useful CLI commands:
+# 6. Start the API (serves the frontend at the root URL)
+uvicorn chatbot.api.main:app --reload
+# API on port 8000 by default (config.yaml: server.port).
+# Open http://localhost:8000 in a browser.
+```
 
-~~~bash
-# Display vector-store statistics
-python -m chatbot.ingestion.cli --stats
+## Tests
 
-# Clear the configured vector collection
-python -m chatbot.ingestion.cli --clear
-~~~
+160 automated tests, written with pytest, covering all 5 modules.
 
-**Warning:** `--clear` deletes data from the configured vector collection. Use it only when you intentionally want to rebuild the knowledge base.
+```bash
+pytest
+```
 
-The source PDF corpus and generated vector database are local data and are not included in this repository by default. Ingest your own documents before asking document-specific questions.
+(`pyproject.toml` sets `testpaths = ["tests"]`; no extra test configuration is documented in the repo.)
 
-## Run the Application
+## Status
 
-From the repository root:
+Built in 2026 as a contribution project for a government-level waste management simulator. Stack: Python, ChromaDB, FastAPI, vanilla HTML/CSS/JS.
 
-~~~bash
-uvicorn chatbot.api.main:app --reload --host 0.0.0.0 --port 8000
-~~~
-
-Open:
-
-- Chat interface: http://localhost:8000/
-- API health: http://localhost:8000/api/health
-- Interactive API documentation: http://localhost:8000/docs
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/chat` | Submit a chat message and receive an answer with source metadata |
-| GET | `/api/health` | Check API health |
-| GET | `/api/documents` | Get document/knowledge-base information |
-
-Example request:
-
-~~~bash
-curl -X POST "http://localhost:8000/api/chat" \
-  -H "Content-Type: application/json" \
-  -d '{"message":"What are the main methods of solid waste treatment?"}'
-~~~
-
-A session identifier can be supplied to continue an existing conversation. Refer to `chatbot/api/models.py` and the interactive API documentation for the exact request and response schemas.
-
-## Embeddable Widget
-
-The project includes `chatbot/frontend/widget.js`. It creates a floating chat interface and uses the Shadow DOM to isolate widget styles from the host website.
-
-After hosting the widget file and making the API reachable, add this script to the host page:
-
-~~~html
-<script
-  src="https://YOUR-FRONTEND-HOST/widget.js"
-  data-api-url="https://YOUR-API-HOST">
-</script>
-~~~
-
-Replace the example hostnames with your actual frontend and API URLs. See `chatbot/frontend/widget-demo.html` for a local integration example.
-
-## LLM Provider Configuration
-
-Groq is selected by default. The codebase also includes integrations for Google Gemini, OpenAI, Anthropic, and Ollama. Change the provider and model in `config.yaml`, set the corresponding environment variable/API key where required, and restart the server. Refer to the provider implementation for the exact environment-variable name.
-
-## Run Tests
-
-~~~bash
-python -m pytest
-~~~
-
-To run selected test groups:
-
-~~~bash
-python -m pytest tests/api/
-python -m pytest tests/retriever/
-~~~
-
-## Data and Security Notes
-
-- `config.yaml` contains application configuration.
-- `.env` stores private credentials and must never be committed.
-- `Books/` is the default input directory for PDF documents.
-- `data/` is used for generated local data, including ChromaDB and chat history.
-- Back up important source PDFs and vector-store data.
-- Restrict CORS origins appropriately before exposing the API publicly.
-
-## Deployment Note
-
-The frontend and backend must be connected for the complete chatbot to work. A frontend-only deployment is not sufficient: the backend also needs to be running with its LLM credentials and an initialized knowledge base.
-
-## License
-
-No license file is currently included in this repository. Add a LICENSE file if you intend to distribute the project under a particular open-source license.
+Author: Sarosh Qaiser — https://github.com/Sarosh548
